@@ -1,0 +1,2 @@
+-- FotoUrl column already added via manual SQL on production
+-- This migration is a no-op to satisfy Prisma migration tracking

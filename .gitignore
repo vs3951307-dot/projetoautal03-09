@@ -1,0 +1,77 @@
+# Dependências
+/node_modules
+
+# Build
+/.next
+/out
+/dist
+/build
+
+# Ambiente / segredos — NUNCA commit arquivos .env reais
+.env
+.env.local
+.env.*.local
+.env.test
+.env.production
+
+# Template/referências de env (marcar como exemplo com whitelist no final)
+!.env.example
+!.env.test.example
+
+# Cache / tipos
+tsconfig.tsbuildinfo
+next-env.d.ts
+*.tsbuildinfo
+
+# Testes / artefatos locais gerados na validação
+*.cookies
+*.json.bak
+/auditoria-botoes.json
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Sistema operacional / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Prime Prisma
+node_modules/.prisma
+
+# Arquivos locais do ambiente Windows (rotinas de subida local)
+*.bat.bak
+
+# Relatórios e checklists de sessões anteriores (documentação de trabalho
+# local, não docs operacionais de deploy/leitura — mantidos fora do repositório)
+/bat-deploy.bat
+ACHADOS.md
+AUDITORIA.md
+CHANGES.md
+CHECKLIST-POS-DEPLOY.md
+CHECKLIST-PRODUCAO.md
+CHECKLIST_SEGURANCA_PRODUCAO.md
+COMANDOS-VPS.md
+COMO-CONTINUAR-EM-OUTRO-LUGAR.md
+COMO-RODAR-LOCALMENTE.md
+CORRECOES-AUDITORIA.md
+CORRECOES-SESSAO.md
+DEPLOY-FINAL.md
+DEPLOY-VPS.md
+INICIAR-PEDIDOFLOW.bat
+NOVA_EMPRESA.md
+PENDING_TASKS.md
+RELATORIO-ENTREGA-FINAL.md
+RELATORIO-FINAL-DEPLOY.md
+RELATORIO-IA-WHATSAPP.md
+RELATORIO_AUDITORIA_FINAL.md
+RELATORIO_FINAL.md
+SECURITY_AUDIT.md
+SUPERADMIN.md
+TESTE-FINAL-PEDIDOFLOW.md
