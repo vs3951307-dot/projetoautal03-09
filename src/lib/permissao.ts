@@ -95,3 +95,16 @@ export function usuarioSeguro(usuario: UsuarioComPermissoes) {
     ativo: usuario.ativo,
   };
 }
+
+/**
+ * Usuário pode ver o assistente Copiloto (botão flutuante de suporte).
+ * Restrito a Administrador e Caixa — telas de frente da operação que lidam
+ * com cliente. Garçom, Cozinha e Entregador não veem o botão (PEDIDO 5).
+ */
+export function usuarioTemCopiloto(
+  usuario: { papel: string; modulosAtivos?: string[] },
+  modulo: string
+): boolean {
+  if (!usuario.modulosAtivos?.includes(modulo)) return false;
+  return recursosDoPapel(usuario.papel).includes("admin") || usuario.papel === "CAIXA";
+}

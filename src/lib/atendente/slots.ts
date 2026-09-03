@@ -63,8 +63,8 @@ export type PerguntaAvulsa = "horario" | "entrega" | "prazo" | "cardapio" | "tot
 
 const PERGUNTAS: [PerguntaAvulsa, RegExp][] = [
   ["prazo", /\b(quanto (tempo|demora)|demora|em quanto tempo|qual o prazo|leva quanto)\b/i],
-  ["horario", /\b(que horas?|hor[aá]rio|at[eé] que horas|abre|fecha|funciona at[eé])\b/i],
-  ["entrega", /\b(entregam?|taxa de entrega|voc[eê]s entregam|entrega em|frete)\b/i],
+  ["horario", /\b(que horas?|hor[aá]rio|at[eé] que horas|abre|fecha|funciona at[eé]|t[aá] (aberto|funcionando|fazendo)|ainda (t[aá]|t[aã]o?)|t[aã]o? fazendo|vai at[eé] (que horas|quando))\b/i],
+  ["entrega", /\b(?:taxa\s+(?:de|da)\s+entrega|voc[eê]s\s+entregam|entregam\s+(?:isso|a[ií]|no\s+meu|em\s+outra|pra\s+outro)|faz(?:em)?\s+entrega|quanto\s+(?:custa|é|fica)\s+a?\s*entrega|entrega\s+fora|n[aã]o\s+entregam|aceitam\s+entrega|custa\s+a\s+entrega)\b/i],
   ["total", /\b(quanto (ficou|fica|deu|t[aá]|custa o pedido)|qual o total|total do pedido|quanto q fica)\b/i],
   ["cardapio", /\b(card[aá]pio|menu|o que (voc[eê]s )?t[eê]m|quais sabores|quais op[cç][õo]es)\b/i],
 ];

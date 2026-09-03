@@ -45,68 +45,77 @@ export function PedidoCart({
   const { total } = calcularTotais(itens);
 
   return (
-    <div className={cn("flex flex-col gap-5", className)}>
-      {itens.length === 0 ? (
-        <EmptyState
-          title="Pedido vazio"
-          description="Toque em um produto ao lado para adicionar à comanda."
-        />
-      ) : (
-        <ul className="flex flex-col gap-4">
-          {itens.map((item) => (
-            <ItemPedidoRow
-              key={item.uid}
-              item={item}
-              onQuantidade={onQuantidade}
-              onObservacao={onObservacaoItem}
-              onRemover={onRemover}
-            />
-          ))}
-        </ul>
-      )}
-
-      <Separator />
-
-      <div className="flex flex-col gap-2">
-        <label htmlFor="observacao-geral" className="text-sm font-medium text-foreground/90">
-          Observações do pedido
-        </label>
-        <Textarea
-          id="observacao-geral"
-          placeholder="Ex.: cliente com pressa, aniversariante na mesa, entregar tudo junto..."
-          value={observacaoGeral}
-          onChange={(e) => onObservacaoGeral(e.target.value)}
-          className="min-h-[5rem]"
-        />
+    <div className={cn("flex min-h-0 flex-1 flex-col", className)}>
+      {/* Itens com rolagem interna — ocupam o espaço disponível; quando a
+          comanda tem altura máxima, o excesso rola aqui e nunca empurra o
+          total/botões para fora da tela. */}
+      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+        {itens.length === 0 ? (
+          <EmptyState
+            title="Pedido vazio"
+            description="Toque em um produto ao lado para adicionar à comanda."
+          />
+        ) : (
+          <ul className="flex flex-col gap-4">
+            {itens.map((item) => (
+              <ItemPedidoRow
+                key={item.uid}
+                item={item}
+                onQuantidade={onQuantidade}
+                onObservacao={onObservacaoItem}
+                onRemover={onRemover}
+              />
+            ))}
+          </ul>
+        )}
       </div>
 
-      <div className="flex items-center justify-between text-lg font-bold">
-        <span>Total</span>
-        <span className="tabular">{formatBRL(total)}</span>
-      </div>
+      {/* Rodapé fixo: observação, total e botões sempre visíveis,
+          mesmo quando a lista de itens rola internamente. */}
+      <div className="flex shrink-0 flex-col gap-4 pt-4">
+        <Separator />
 
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <Button
-          type="button"
-          variant="outline"
-          size="lg"
-          className="w-full sm:w-auto"
-          onClick={onImprimir}
-          disabled={itens.length === 0}
-        >
-          <Printer className="h-5 w-5" />
-          Imprimir
-        </Button>
-        <Button
-          type="button"
-          size="lg"
-          className="w-full flex-1"
-          onClick={onSalvar}
-          disabled={!podeEnviar}
-        >
-          <Send className="h-5 w-5" />
-          Salvar e enviar para a cozinha
-        </Button>
+        <div className="flex flex-col gap-2">
+          <label htmlFor="observacao-geral" className="text-sm font-medium text-foreground/90">
+            Observações do pedido
+          </label>
+          <Textarea
+            id="observacao-geral"
+            placeholder="Ex.: cliente com pressa, aniversariante na mesa, entregar tudo junto..."
+            value={observacaoGeral}
+            onChange={(e) => onObservacaoGeral(e.target.value)}
+            className="min-h-[4.5rem] max-h-[6rem]"
+          />
+        </div>
+
+        <div className="flex items-center justify-between text-lg font-bold">
+          <span>Total</span>
+          <span className="tabular">{formatBRL(total)}</span>
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="w-full sm:w-auto"
+            onClick={onImprimir}
+            disabled={itens.length === 0}
+          >
+            <Printer className="h-5 w-5" />
+            Imprimir
+          </Button>
+          <Button
+            type="button"
+            size="lg"
+            className="w-full flex-1"
+            onClick={onSalvar}
+            disabled={!podeEnviar}
+          >
+            <Send className="h-5 w-5" />
+            Salvar e enviar para a cozinha
+          </Button>
+        </div>
       </div>
     </div>
   );

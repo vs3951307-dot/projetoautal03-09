@@ -435,8 +435,15 @@ export async function criarPedido(
   const entregaBruto =
     corpo.entrega && typeof corpo.entrega === "object" ? (corpo.entrega as Record<string, unknown>) : {};
   const bairroEntrega = entregaBruto.bairro ? String(entregaBruto.bairro).trim() : null;
+  // Distância (km) pode vir informada pelo WhatsApp (geolocalização do
+  // cliente) para a regra por distância. Só a usa se for um número finito.
+  const kmEntrega = Number.isFinite(Number(entregaBruto.distanciaEmKm))
+    ? Math.max(0, Number(entregaBruto.distanciaEmKm))
+    : undefined;
   const configTaxa = await lerConfigTaxaEntrega(empresaId);
-  const { taxa: taxaEntrega } = calcularTaxaEntrega(configTaxa, bairroEntrega, totalItens);
+  const { taxa: taxaEntrega } = calcularTaxaEntrega(configTaxa, bairroEntrega, totalItens, {
+    ...(kmEntrega !== undefined ? { distanciaEmKm: kmEntrega } : {}),
+  });
   const formaPagamentoEntrega = corpo.formaPagamentoEntrega ? String(corpo.formaPagamentoEntrega) : null;
   if (formaPagamentoEntrega && !FORMAS_ENTREGA.includes(formaPagamentoEntrega)) {
     return { ok: false, status: 400, erro: "Forma de pagamento da entrega inválida." };

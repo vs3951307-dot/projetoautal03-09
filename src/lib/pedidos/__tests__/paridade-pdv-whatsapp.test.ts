@@ -80,7 +80,7 @@ beforeAll(async () => {
   // Encontra um produto que é pizza (tem sabores vinculados) com preço de
   // "Família" no cadastro — sem hardcode de id, para ser robusto a mudanças
   // de seed. Precisa ter ao menos 3 sabores distintos do pool (Família
-  // aceita 3) e os sabores especiais compondo o total famoso de R$ 92.
+  // aceita 3) e os sabores especiais compondo o total famoso de R$ 82.
   const pizza = await db.produto.findFirst({
     where: {
       empresaId: empresa.id,
@@ -100,7 +100,7 @@ beforeAll(async () => {
   pizzaBase = { id: pizza.id, nome: pizza.nome };
 
   // Sabores disponíveis no cadastro desta empresa (nomes dos Sabor vinculados
-  // aos produtos de pizza). A ordem favorece os 3 especiais do caso R$ 92,
+  // aos produtos de pizza). A ordem favorece os 3 especiais do caso R$ 82,
   // com 4 Queijos (tradicional) como reserva para o caso meia-a-meia.
   const nomes = await db.produto.findMany({
     where: { empresaId: empresa.id, ativo: true, sabores: { some: {} } },
@@ -181,7 +181,7 @@ function corpoWhatsApp() {
 }
 
 describe("Paridade de preço — PDV × WhatsApp (mesmo pedido, mesmo total)", () => {
-  it("Família com 3 sabores especiais custa R$ 92 nos DOIS canais (o bug que voltou 72)", async () => {
+  it("Família com 3 sabores especiais custa R$ 82 nos DOIS canais (3º não gera outro acréscimo)", async () => {
     const [viaPdv, viaWhats] = await comoEmpresa(empresa, async () => [
       await criarPedido(empresa.id, { id: "usr-pdv", nome: "Caixa", papel: "CAIXA" }, corpoPdv()),
       await criarPedido(
@@ -208,8 +208,8 @@ describe("Paridade de preço — PDV × WhatsApp (mesmo pedido, mesmo total)", (
     // A PARIDADE: o total não pode depender do canal.
     expect(viaWhats.pedido.total).toBe(viaPdv.pedido.total);
     // E o valor conhecido fechado com o dono do negócio (spec §2).
-    expect(viaPdv.pedido.total).toBe(92);
-    expect(viaWhats.pedido.total).toBe(92);
+    expect(viaPdv.pedido.total).toBe(82);
+    expect(viaWhats.pedido.total).toBe(82);
   });
 
   it("meia-a-meia tradicional + especial cobra o MAIOR preço, igual nos dois canais, independente da ordem", async () => {

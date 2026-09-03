@@ -264,6 +264,11 @@ export function classificarAcao(texto: string, etapaAtual: string): AcaoCliente 
   if (etapaAtual === "nome") return "informar_nome";
   if (etapaAtual === "endereco") return "informar_endereco";
 
+  // Consulta de HORÁRIO coloquial — antes de pedir_produto, porque frases
+  // como "tão fazendo pedido ainda?" ou "tá fazendo pizza?" NÃO iniciam um
+  // novo pedido (PEDIDO 1).
+  if (/(horário|aberto|abre|fecha|funcionamento|est[ãa]o abertos|t[aá] (?:aberto|funcionando|fazendo)|ainda (?:t[aá]|t[aã]o?)|t[aã]o? fazendo|ainda fazem|at[eé] que horas|vai at[eé] (?:que horas|quando)|funciona at[eé])/i.test(t)) return "ver_horario";
+
   // Pedidos de produto
   if (/(quero pedir|quero fazer|gostaria|vou pedir|pedido|pedir|quero|me vê|manda)/i.test(t)) return "pedir_produto";
 
@@ -272,7 +277,6 @@ export function classificarAcao(texto: string, etapaAtual: string): AcaoCliente 
   if (/(quanto custa|qual.*preço|quanto.*é|preço)/i.test(t)) return "ver_preco";
   if (/\b(tem|vocês têm|existe|disponível)/i.test(t)) return "ver_disponibilidade";
   if (/(promo|oferta|destaque|combo)/i.test(t)) return "ver_promocao";
-  if (/(horário|aberto|fecha|funcionamento)/i.test(t)) return "ver_horario";
   if (/(regra|política|mínimo)/i.test(t)) return "ver_regras";
   if (/(entregam|entrega|taxa|bairro)/i.test(t)) return "ver_entrega";
   if (/(quanto tá|total|quanto vai|quanto deu)/i.test(t)) return "ver_total";

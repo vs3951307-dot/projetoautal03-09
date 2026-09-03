@@ -1,6 +1,7 @@
 "use client";
 
-import { ExternalLink, Printer } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ExternalLink, Printer, ReceiptText } from "lucide-react";
 
 import {
   Dialog,
@@ -138,9 +139,44 @@ function BlocoAutorizada({ cupom }: { cupom: CupomVenda }) {
  * aviso correspondente é exibido — nunca se simula sucesso.
  */
 export function NfceDialog({ cupom, onConcluir }: NfceDialogProps) {
-  const statusFiscal = cupom?.fiscal?.status ?? null;
+  // O cupom original vem do pagamento (emissão automática). Ao emitir/re-tentar
+  // manualmente, o status fiscal aqui é atualizado com o retorno do servidor
+  // sem perder os demais dados da venda.
+  const [fiscal, setFiscal] = useState<CupomVenda["fiscal"]>(cupom?.fiscal ?? null);
+  const [emitindo, setEmitindo] = useState(false);
+  const [erroEmissao, setErroEmissao] = useState<string | null>(null);
+
+  useEffect(() => {
+    setFiscal(cupom?.fiscal ?? null);
+    setErroEmissao(null);
+  }, [cupom]);
+
+  const statusFiscal = fiscal?.status ?? null;
   const autorizada = statusFiscal === "autorizado";
   const exibirAviso = !cupom || statusFiscal === null || STATUS_SEM_FISCAL.includes(statusFiscal);
+
+  async function emitirNota() {
+    if (!cupom?.pedidoId || emitindo) return;
+    setEmitindo(true);
+    setErroEmissao(null);
+    try {
+      const res = await fetch("/api/fiscal/emissao", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pedidoId: cupom.pedidoId, manual: true }),
+      });
+      const dados = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErroEmissao(dados?.erro ?? "Falha ao emitir a nota fiscal.");
+        return;
+      }
+      setFiscal((dados?.fiscal as CupomVenda["fiscal"]) ?? null);
+    } catch {
+      setErroEmissao("Sem resposta do servidor. Tente novamente.");
+    } finally {
+      setEmitindo(false);
+    }
+  }
 
   return (
     <Dialog open={cupom !== null} onOpenChange={(open) => !open && onConcluir()}>
@@ -176,12 +212,12 @@ export function NfceDialog({ cupom, onConcluir }: NfceDialogProps) {
 
             <div className="flex items-center justify-between">
               <span className="font-bold">
-                {autorizada && cupom.fiscal?.retorno?.numero
-                  ? `NFC-e nº ${cupom.fiscal.retorno.numero}`
+                {autorizada && fiscal?.retorno?.numero
+                  ? `NFC-e nº ${fiscal.retorno.numero}`
                   : `Pedido nº ${cupom.contexto}`}
               </span>
-              {autorizada && cupom.fiscal?.retorno?.serie && (
-                <span>Série {cupom.fiscal.retorno.serie}</span>
+              {autorizada && fiscal?.retorno?.serie && (
+                <span>Série {fiscal.retorno.serie}</span>
               )}
             </div>
             <p className="mt-1 text-xs">Emissão: {new Date().toLocaleString("pt-BR")}</p>
@@ -233,9 +269,9 @@ export function NfceDialog({ cupom, onConcluir }: NfceDialogProps) {
             <Separator className="my-3" />
 
             {autorizada ? (
-              <BlocoAutorizada cupom={cupom} />
+              <BlocoAutorizada cupom={{ ...cupom, fiscal }} />
             ) : (
-              <AvisoFiscal cupom={cupom} />
+              <AvisoFiscal cupom={{ ...cupom, fiscal }} />
             )}
 
             {statusFiscal && (
@@ -251,7 +287,24 @@ export function NfceDialog({ cupom, onConcluir }: NfceDialogProps) {
           </div>
         )}
 
-        <DialogFooter>
+        {erroEmissao && (
+          <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            {erroEmissao}
+          </p>
+        )}
+
+        <DialogFooter className="flex-col-reverse gap-2 sm:flex-row">
+          {cupom?.pedidoId && !autorizada && (
+            <Button
+              variant="outline"
+              onClick={emitirNota}
+              disabled={emitindo}
+              className="w-full sm:w-auto"
+            >
+              <ReceiptText className="h-4 w-4" />
+              {emitindo ? "Emitindo…" : "Emitir nota fiscal"}
+            </Button>
+          )}
           <Button variant="outline" onClick={() => window.print()}>
             <Printer className="h-5 w-5" />
             Imprimir

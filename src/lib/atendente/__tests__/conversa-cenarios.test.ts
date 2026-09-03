@@ -447,4 +447,39 @@ describe("pedido completo numa mensagem só (integração pelo pipeline real)", 
     const sabores = e.atual?.saboresEscolhidos ?? e.itens[0]?.sabores ?? [];
     expect(sabores).not.toContain("Banana");
   });
+
+  it("BLINDAGEM — meio a meio + 'para entrega' vira 1 pizza com canal entrega", async () => {
+    const r = await enviar(
+      "quero uma pizza grande metade calabresa metade estrogonofe de carne para entrega"
+    );
+    const e = conversa.dados as {
+      itens: { nome: string; tamanho: string | null; sabores: string[] }[];
+      canal?: string;
+      formaPagamento?: string;
+    };
+    // Continua sendo UMA pizza (os dois sabores no mesmo item).
+    expect(e.itens).toHaveLength(1);
+    expect(e.itens[0].tamanho).toBe("Grande");
+    expect(e.itens[0].sabores).toEqual(["Calabresa", "Estrogonofe de Carne"]);
+    // "para entrega" é MODALIDADE (canal), não uma pergunta avulsa.
+    expect(e.canal).toBe("entrega");
+    // Nada vira pendência nem repete pergunta de modalidade.
+    expect(e.pendentes ?? []).toEqual([]);
+    expect(r).not.toMatch(/entrega ou retirada|qual a forma de pagamento|card[aá]pio|quanto (custa|tempo)/i);
+    expect(r).not.toMatch(/NaN/);
+  });
+
+  it("BLINDAGEM — 'entrega na minha casa' depois do sabor também é modalidade", async () => {
+    await enviar("quero uma pizza grande metade calabresa metade estrogonofe de carne");
+    await enviar("entrega na minha casa");
+    const e = conversa.dados as {
+      itens: { sabores: string[] }[];
+      canal?: string;
+      atual?: unknown;
+    };
+    expect(e.canal).toBe("entrega");
+    // O pedido não foi descartado por uma "pergunta" fantasma de entrega.
+    expect(e.itens.length + (e.atual ? 1 : 0)).toBe(1);
+    expect(e.itens[0]?.sabores ?? e.atual).toBeDefined();
+  });
 });

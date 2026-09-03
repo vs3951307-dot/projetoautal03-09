@@ -63,7 +63,13 @@ export function ConfigTaxas() {
   const [bairros, setBairros] = React.useState<{ bairro: string; valor: string }[]>(
     (taxas.taxaEntrega.bairros ?? []).map((b) => ({ bairro: b.bairro, valor: String(b.valor) }))
   );
-
+  const [naoAtendidos, setNaoAtendidos] = React.useState<string[]>(
+    taxas.taxaEntrega.bairrosNaoAtendidos ?? []
+  );
+  const [valorPorKm, setValorPorKm] = React.useState(String(taxas.taxaEntrega.valorPorKm ?? ""));
+  const [taxaMinima, setTaxaMinima] = React.useState(String(taxas.taxaEntrega.taxaMinima ?? ""));
+  const [taxaBase, setTaxaBase] = React.useState(String(taxas.taxaEntrega.taxaBase ?? ""));
+  const [raioMaximoKm, setRaioMaximoKm] = React.useState(String(taxas.taxaEntrega.raioMaximoKm ?? ""));
   const persistir = (taxaEntrega: TaxaEntregaConfig) => {
     api("/api/configuracoes", {
       method: "PUT",
@@ -86,6 +92,11 @@ export function ConfigTaxas() {
         bairros: bairros
           .filter((b) => b.bairro.trim())
           .map((b) => ({ bairro: b.bairro.trim(), valor: Number(b.valor) || 0 })),
+        bairrosNaoAtendidos: naoAtendidos.map((b) => b.trim()).filter(Boolean),
+        valorPorKm: Number(valorPorKm) || 0,
+        taxaMinima: Number(taxaMinima) || 0,
+        taxaBase: Number(taxaBase) || 0,
+        raioMaximoKm: Number(raioMaximoKm) || 0,
       };
       await api("/api/configuracoes", {
         method: "PUT",
@@ -189,7 +200,7 @@ export function ConfigTaxas() {
                 checked={taxaEntregaAtiva}
                 onCheckedChange={(ligado) => {
                   setTaxaEntregaAtiva(ligado);
-                  if (!ligado) persistir({ ...taxas.taxaEntrega, regra, valorFixo: 0, valorPadrao: 0, gratisAcima: 0, bairros: [] });
+                  if (!ligado) persistir({ ...taxas.taxaEntrega, regra, valorFixo: 0, valorPadrao: 0, gratisAcima: 0, bairros: [], bairrosNaoAtendidos: [], valorPorKm: 0, taxaMinima: 0, taxaBase: 0, raioMaximoKm: 0 });
                 }}
                 aria-label="Ativar taxa de entrega"
               />
@@ -215,21 +226,36 @@ export function ConfigTaxas() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="bairro">Por bairro (com padrão)</SelectItem>
+                      <SelectItem value="distancia">Por distância (R$/km)</SelectItem>
                       <SelectItem value="fixa">Valor fixo para todos</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="flex flex-col gap-2">
                   <Label className="text-xs text-muted-foreground">
-                    {regra === "bairro" ? "Valor para bairros não listados (R$)" : "Valor fixo (R$)"}
+                    {regra === "bairro"
+                      ? "Valor para bairros não listados (R$)"
+                      : regra === "distancia"
+                        ? "Taxa mínima (R$)"
+                        : "Valor fixo (R$)"}
                   </Label>
                   <Input
                     type="number"
                     step="0.01"
                     className="w-36"
-                    value={regra === "bairro" ? valorPadrao : valorFixo}
+                    value={
+                      regra === "bairro"
+                        ? valorPadrao
+                        : regra === "distancia"
+                          ? taxaMinima
+                          : valorFixo
+                    }
                     onChange={(e) =>
-                      regra === "bairro" ? setValorPadrao(e.target.value) : setValorFixo(e.target.value)
+                      regra === "bairro"
+                        ? setValorPadrao(e.target.value)
+                        : regra === "distancia"
+                          ? setTaxaMinima(e.target.value)
+                          : setValorFixo(e.target.value)
                     }
                   />
                 </div>
@@ -244,6 +270,46 @@ export function ConfigTaxas() {
                   />
                 </div>
               </div>
+
+              {regra === "distancia" && (
+                <div className="flex flex-wrap items-end gap-4 rounded-xl border border-border p-4">
+                  <div className="flex flex-col gap-2">
+                    <Label className="text-xs text-muted-foreground">Taxa base (R$)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      className="w-36"
+                      value={taxaBase}
+                      onChange={(e) => setTaxaBase(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label className="text-xs text-muted-foreground">Valor por km (R$)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      className="w-36"
+                      value={valorPorKm}
+                      onChange={(e) => setValorPorKm(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label className="text-xs text-muted-foreground">Raio máximo de entrega (km)</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      className="w-36"
+                      value={raioMaximoKm}
+                      onChange={(e) => setRaioMaximoKm(e.target.value)}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Taxa = taxa base + distância × R$/km. Acima do raio máximo não
+                    fazemos entrega. Sem distância confiável informada, o pedido é
+                    encaminhado ao atendente para confirmar a taxa com o cliente.
+                  </p>
+                </div>
+              )}
 
               {regra === "bairro" && (
                 <div className="flex flex-col gap-3 rounded-xl border border-border p-4">
@@ -292,6 +358,51 @@ export function ConfigTaxas() {
                           size="icon"
                           onClick={() => setBairros((atual) => atual.filter((_, i) => i !== indice))}
                           aria-label={`Remover bairro ${b.bairro}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {regra !== "fixa" && (
+                <div className="flex flex-col gap-3 rounded-xl border border-border p-4">
+                  <div className="flex items-center justify-between">
+                    <p className="font-semibold">Bairros sem entrega</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setNaoAtendidos((atual) => [...atual, ""])}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Adicionar bairro sem entrega
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Nestes bairros a entrega é recusada (o cliente pode escolher retirada).
+                  </p>
+                  <ul className="flex flex-col gap-2">
+                    {naoAtendidos.map((nomeBairro, indice) => (
+                      <li key={indice} className="flex items-end gap-2">
+                        <div className="flex flex-1 flex-col gap-1">
+                          <Label className="text-xs text-muted-foreground">Bairro</Label>
+                          <Input
+                            placeholder="Ex.: Zona Industrial"
+                            value={nomeBairro}
+                            onChange={(e) =>
+                              setNaoAtendidos((atual) =>
+                                atual.map((x, i) => (i === indice ? e.target.value : x))
+                              )
+                            }
+                          />
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setNaoAtendidos((atual) => atual.filter((_, i) => i !== indice))}
+                          aria-label={`Remover bairro sem entrega ${nomeBairro}`}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

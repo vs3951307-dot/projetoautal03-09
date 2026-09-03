@@ -1,11 +1,10 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import * as React from "react";
 
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { cn, formatBRL } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import type { Produto, AdicionalPizza, SaborPizza, SaborDisponivel, SelecaoPizza } from "@/lib/catalogo";
 import { PizzaPickerDialog } from "@/app/pdv/_components/pizza-picker-dialog";
 
@@ -20,6 +19,12 @@ interface ProdutoCardProps {
   className?: string;
 }
 
+/**
+ * ProdutoCard — listagem COMPACTA (listagem do PDV/Garçom): destaca o NOME
+ * do produto; tocar no card abre tamanhos/sabores (PizzaPickerDialog) em vez
+ * de ocupar a grade com descrição, preço e botão. Nenhum valor comercial é
+ * destacado aqui — o preço real é decidido no picker/servidor.
+ */
 export function ProdutoCard({
   produto,
   adicionais = [],
@@ -58,57 +63,33 @@ export function ProdutoCard({
         }
       }}
       className={cn(
-        "group flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-card transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-lifted focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/10",
+        "group flex h-full cursor-pointer items-center gap-3 overflow-hidden rounded-xl border border-border bg-card px-3 py-2.5 text-left shadow-card transition-colors hover:border-primary/30 hover:bg-muted/40 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/10",
         className
       )}
     >
-      {/* Placeholder com emoji */}
-      <div className="relative aspect-[4/3] w-full overflow-hidden bg-secondary">
-        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-secondary to-muted text-6xl">
-          {produto.emoji || "🍽️"}
+      {/* Emoji em tile compacto */}
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-secondary text-2xl">
+        {produto.emoji || "🍽️"}
+      </div>
+
+      {/* Nome (principal) + dica discreta */}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <h3 className="truncate text-sm font-semibold leading-tight text-foreground">
+            {produto.nome}
+          </h3>
+          {produto.destaque && (
+            <Badge variant="primary" className="shrink-0">
+              Destaque
+            </Badge>
+          )}
         </div>
-        {produto.destaque && (
-          <Badge variant="primary" className="absolute left-2 top-2">
-            Destaque
-          </Badge>
-        )}
-      </div>
-
-      {/* Conteúdo */}
-      <div className="flex flex-1 flex-col items-center gap-1.5 p-4 text-center">
-        <h3 className="text-sm font-semibold leading-tight text-foreground">{produto.nome}</h3>
-
-        {produto.descricao && (
-          <p className="line-clamp-2 text-xs leading-snug text-muted-foreground">
-            {produto.descricao}
-          </p>
-        )}
-
-        <p className="mt-1 text-base font-bold tabular text-foreground">
-          {formatBRL(produto.preco)}
+        <p className="mt-0.5 text-[11px] text-muted-foreground">
+          {temOpcoes ? "Toque para escolher tamanho e sabores" : "Toque para adicionar"}
         </p>
-
-        {temOpcoes && (
-          <p className="text-[11px] text-muted-foreground">
-            {produto.tamanhos && produto.tamanhos.length > 0
-              ? `Opções: ${produto.tamanhos.map((t) => t.nome).join(" · ")}`
-              : `${produto.sabores?.length ?? 0} sabores`}
-          </p>
-        )}
-
-        <Button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            abrirOuAdicionar();
-          }}
-          className="mt-auto w-full"
-          aria-label={`Adicionar ${produto.nome} à comanda`}
-        >
-          <Plus className="h-4 w-4" />
-          Adicionar
-        </Button>
       </div>
+
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60" />
 
       <PizzaPickerDialog
         open={pickerAberto}

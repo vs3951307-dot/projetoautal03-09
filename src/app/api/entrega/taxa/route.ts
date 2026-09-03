@@ -7,9 +7,10 @@ import { comTratamentoDeErro } from "@/lib/api-erro";
 const paramsSchema = z.object({
   bairro: z.string().trim().max(60).nullable().optional(),
   total: z.coerce.number().nonnegative().max(1000000).default(0),
+  km: z.coerce.number().nonnegative().max(100000).nullish(), // regra por distância
 });
 
-/** Calcula a taxa de entrega pelas regras configuradas (?bairro=&total=). */
+/** Calcula a taxa de entrega pelas regras configuradas (?bairro=&total=&km=). */
 export const GET = comTratamentoDeErro("entrega.taxa.GET", async (req: NextRequest) => {
   const acesso = await autorizar("pdv", "salao", "clientes");
   if (!acesso.ok) return acesso.resposta;
@@ -17,18 +18,27 @@ export const GET = comTratamentoDeErro("entrega.taxa.GET", async (req: NextReque
   const validado = paramsSchema.safeParse({
     bairro: req.nextUrl.searchParams.get("bairro")?.trim() || null,
     total: req.nextUrl.searchParams.get("total") ?? "0",
+    km: req.nextUrl.searchParams.get("km") === null || req.nextUrl.searchParams.get("km") === ""
+      ? undefined
+      : req.nextUrl.searchParams.get("km"),
   });
   if (!validado.success) {
     return NextResponse.json({ erro: "Parâmetros inválidos." }, { status: 400 });
   }
-  const { bairro, total } = validado.data;
+  const { bairro, total, km } = validado.data;
 
   const config = await lerConfigTaxaEntrega(acesso.empresaId);
-  const resultado = calcularTaxaEntrega(config, bairro, total);
+  const resultado = calcularTaxaEntrega(config, bairro, total, {
+    distanciaEmKm: km === null || km === undefined ? undefined : km,
+  });
 
   return NextResponse.json({
     taxa: resultado.taxa,
     regra: resultado.regra,
     gratuito: resultado.gratuito,
+    atende: resultado.atende,
+    motivo: resultado.motivo ?? null,
+    exigeHumano: resultado.exigeHumano,
+    distanciaKm: resultado.distanciaKm ?? null,
   });
 });

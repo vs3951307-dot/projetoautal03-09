@@ -71,6 +71,8 @@ export interface CupomVenda {
   troco?: number;
   fiscal: ResumoFiscalVenda | null;
   empresa: EmpresaCupom | null;
+  /** Id do pedido no banco (quando existe) — usado para emitir/re-tentar NFC-e. */
+  pedidoId?: string;
 }
 
 interface RespostaPagamento {
@@ -275,6 +277,7 @@ export function useCobranca(): CobrancaController {
         troco: pagamento.troco,
         fiscal: resposta.fiscal ?? null,
         empresa: resposta.empresa ?? null,
+        pedidoId,
       });
       setPagamentoAberto(false);
       aoConfirmarRef.current?.(pedidoCriado);

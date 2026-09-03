@@ -29,6 +29,7 @@ export default async function CardapioDaMesa({
       slug={mesa.empresaSlug}
       token={params.token}
       empresaNome={mesa.empresaNome}
+      empresaLogoUrl={mesa.empresaLogoUrl}
       mesaNumero={mesa.mesaNumero}
     />
   );

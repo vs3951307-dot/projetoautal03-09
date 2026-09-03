@@ -153,8 +153,8 @@ export default function PedidoMesaPage() {
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_23rem]">
         <CatalogoProdutos onAdicionar={handleAdicionar} />
 
-        <Card className="hidden self-start lg:sticky lg:top-6 lg:block">
-          <div className="flex flex-col gap-5 p-6 sm:p-7">
+        <Card className="hidden min-h-0 self-start lg:sticky lg:top-6 lg:flex lg:h-[calc(100vh-8.5rem)] lg:flex-col lg:overflow-hidden">
+          <div className="flex min-h-0 flex-1 flex-col gap-5 p-6 sm:p-7">
             <h2 className="text-xl font-semibold tracking-[-0.01em]">Pedido atual</h2>
             <PedidoCart
               itens={itens}
@@ -180,8 +180,9 @@ export default function PedidoMesaPage() {
 
       {/* Pedido atual (mobile) */}
       <Sheet open={carrinhoAberto} onOpenChange={setCarrinhoAberto}>
-        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto scrollbar-thin">
+        <SheetContent side="bottom" className="flex max-h-[85vh] flex-col overflow-hidden">
           <SheetTitle>Pedido — Mesa {String(mesa.id).padStart(2, "0")}</SheetTitle>
+          <div className="min-h-0 flex-1 overflow-hidden pb-4">
           <PedidoCart
             itens={itens}
             observacaoGeral={observacaoGeral}
@@ -193,6 +194,7 @@ export default function PedidoMesaPage() {
             onSalvar={handleSalvar}
             onImprimir={handleImprimir}
           />
+          </div>
         </SheetContent>
       </Sheet>
 

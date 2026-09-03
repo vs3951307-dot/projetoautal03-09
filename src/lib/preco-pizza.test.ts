@@ -179,11 +179,11 @@ describe("calcularPrecoItem — regra de preço pizza (§2 da spec)", () => {
     if (!("erro" in r)) expect(r.precoUnitario).toBe(56);
   });
 
-  it("Família / 3 especiais = 92,00", async () => {
+  it("Família / 3 especiais = 82,00 (3º não gera outro acréscimo)", async () => {
     const s = await montarSabores(["Doritos", "Tomate Seco", "Filé na Chapa"], "Família");
     const r = calcularPrecoItem(entrada(s, { maxSabores: await maxSabores("Família") }));
     expect("erro" in r).toBe(false);
-    if (!("erro" in r)) expect(r.precoUnitario).toBe(92);
+    if (!("erro" in r)) expect(r.precoUnitario).toBe(82);
   });
 });
 
@@ -207,9 +207,10 @@ describe("maxSabores vem do banco e permite meia a meia / 3 sabores", () => {
   });
 });
 
-describe("acréscimo de R$ 10 por sabor premium ADICIONAL", () => {
-  // A regra é "por sabor premium ADICIONAL", multiplicada — não um valor
-  // fixo somado uma vez. Cada caso abaixo isola um degrau dela.
+describe("acréscimo de R$ 10 UMA única vez (2 ou mais premium)", () => {
+  // A regra é "R$ 10 UMA única vez quando há 2 ou mais sabores premium" —
+  // o terceiro sabor da família NÃO soma outro acréscimo. Cada caso abaixo
+  // isola um degrau dela.
   it("1 sabor premium sozinho NÃO gera acréscimo (Média/Doritos = 52)", async () => {
     const s = await montarSabores(["Doritos"], "Média");
     const r = calcularPrecoItem(entrada(s, { maxSabores: await maxSabores("Média") }));
@@ -217,18 +218,18 @@ describe("acréscimo de R$ 10 por sabor premium ADICIONAL", () => {
     if (!("erro" in r)) expect(r.precoUnitario).toBe(52);
   });
 
-  it("2 sabores premium geram 1× R$10 (Média: 52 + 10 = 62)", async () => {
+  it("2 sabores premium geram o único R$10 (Média: 52 + 10 = 62)", async () => {
     const s = await montarSabores(["Doritos", "Tomate Seco"], "Média");
     const r = calcularPrecoItem(entrada(s, { maxSabores: await maxSabores("Média") }));
     expect("erro" in r).toBe(false);
     if (!("erro" in r)) expect(r.precoUnitario).toBe(62);
   });
 
-  it("3 sabores premium geram 2× R$10 (Família: 72 + 20 = 92)", async () => {
+  it("3 sabores premium geram APENAS 1× R$10 (Família: 72 + 10 = 82)", async () => {
     const s = await montarSabores(["Doritos", "Tomate Seco", "Filé na Chapa"], "Família");
     const r = calcularPrecoItem(entrada(s, { maxSabores: await maxSabores("Família") }));
     expect("erro" in r).toBe(false);
-    if (!("erro" in r)) expect(r.precoUnitario).toBe(92);
+    if (!("erro" in r)) expect(r.precoUnitario).toBe(82);
   });
 
   it("2 sabores TRADICIONAIS não geram acréscimo nenhum (Média = 46)", async () => {

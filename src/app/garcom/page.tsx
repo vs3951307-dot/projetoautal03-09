@@ -19,6 +19,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { STATUS_CONFIG, type TableStatus } from "@/components/patterns/status-badge";
+import { FilaAprovacao } from "@/components/salao/FilaAprovacao";
 import { useRelogio } from "@/hooks/use-relogio";
 import { useGarcom } from "@/app/garcom/_lib/garcom-context";
 import type { Mesa } from "@/app/garcom/_lib/mock-data";
@@ -86,6 +87,10 @@ export default function GarcomMesasPage() {
         title="Mesas"
         description="Toque em uma mesa livre para abrir, ou em uma mesa ocupada para ver o pedido."
       />
+
+      {/* Pedidos do cardápio digital do QR aguardando aprovação — aparecem
+          aqui no painel do garçom para aceitar ou rejeitar. */}
+      <FilaAprovacao />
 
       {/* Filtro por status + grade */}
       <Tabs

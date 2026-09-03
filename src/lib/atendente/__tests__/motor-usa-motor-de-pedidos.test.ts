@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
  * escrevendo direto no Prisma (`tx.pedido.create`) e calculando o preço
  * com `lib/precificacao.ts` — que ignora sabores. Consequência real: uma
  * pizza Família com 3 sabores especiais saía por R$ 72 pelo WhatsApp e
- * R$ 92 pelo PDV, e o índice único de idempotência nunca era usado nesse
+ * R$ 82 pelo PDV, e o índice único de idempotência nunca era usado nesse
  * caminho (reenvio da Meta = pedido duplicado).
  *
  * O bug sobreviveu tanto tempo porque nenhum teste comparava os dois

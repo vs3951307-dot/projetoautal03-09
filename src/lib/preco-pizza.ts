@@ -4,19 +4,19 @@
  *
  * Fórmula fechada com o dono do negócio (Disk Pizza Rozeno):
  *
- *   precoUnitario =
+*   precoUnitario =
  *       MAIOR precoNoTamanho entre os sabores escolhidos
- *     + acrescimoPorSaborPremium × max(0, qtdSaboresPremium − 1)
- *     + soma dos adicionais (preco × quantidade)
+ *     + (2 ou mais sabores premium ? acrescimoPorSaborPremium : 0)
+ *     + soma dos adicionais (preco �- quantidade)
  *
- * onde qtdSaboresPremium = sabores com tipo != "tradicional"
- * (ou seja, "especial" e "doce" — a faixa premium).
+ * onde sabores premium = sabores com tipo != "tradicional"
+ * (ou seja, "especial" e "doce" �?" a faixa premium).
  *
- * Pontos críticos que esta função garante:
- * - É MAIOR preço entre os sabores, nunca o do primeiro clicado.
- * - O acréscimo é POR sabor premium ADICIONAL e multiplicado (3 sabores
- *   premium = 2× acréscimo), não um valor fixo somado uma vez.
- * - Dois sabores tradicionais não geram acréscimo.
+ * Pontos cr��ticos que esta fun��ǜo garante:
+ * - �% MAIOR pre��o entre os sabores, nunca o do primeiro clicado.
+ * - O acrǸscimo Ǹ aplicado UMA ǧnica vez quando hǭ 2 ou mais sabores
+ *   premium (o terceiro sabor da fam��lia NǟO gera outro acrǸscimo).
+ * - Dois sabores tradicionais nǜo geram acrǸscimo.
  * - Valida o limite de sabores do tamanho (maxSabores).
  */
 
@@ -87,7 +87,7 @@ export function calcularPrecoItem(
     0
   );
 
-  const acrescimoTotal = acrescimo * Math.max(0, qtdPremium - 1);
+  const acrescimoTotal = qtdPremium >= 2 ? acrescimo : 0;
   const precoUnitario = arredondar(maiorPreco + acrescimoTotal + totalAdicionais);
   const total = arredondar(precoUnitario * quantidade);
 

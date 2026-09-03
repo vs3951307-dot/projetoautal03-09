@@ -60,11 +60,13 @@ export function MenuClient({
   slug,
   token,
   empresaNome,
+  empresaLogoUrl,
   mesaNumero,
 }: {
   slug: string;
   token: string;
   empresaNome: string;
+  empresaLogoUrl?: string | null;
   mesaNumero: number;
 }) {
   const [dados, setDados] = useState<Dados | null>(null);
@@ -229,8 +231,20 @@ export function MenuClient({
   return (
     <main className="mx-auto max-w-md pb-40">
       <header className="sticky top-0 z-10 border-b bg-background/95 px-4 py-3 backdrop-blur">
-        <h1 className="text-lg font-bold">{empresaNome}</h1>
-        <p className="text-sm text-muted-foreground">Mesa {mesaNumero}</p>
+        <div className="flex items-center gap-3">
+          {empresaLogoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={empresaLogoUrl}
+              alt={`Logo de ${empresaNome}`}
+              className="h-11 w-11 rounded-full object-cover"
+            />
+          ) : null}
+          <div>
+            <h1 className="text-lg font-bold">{empresaNome}</h1>
+            <p className="text-sm text-muted-foreground">Mesa {mesaNumero}</p>
+          </div>
+        </div>
         {dados.aviso ? <p className="mt-1 text-xs text-muted-foreground">{dados.aviso}</p> : null}
       </header>
 

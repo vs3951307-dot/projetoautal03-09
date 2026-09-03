@@ -332,7 +332,19 @@ async function definirEndereco(
   if (!bairro || bairro.length < 2) return ok("E o *bairro*?");
 
   const config = await lerConfigTaxaEntrega(ctx.empresaId);
-  const { taxa } = calcularTaxaEntrega(config, bairro, 0);
+  const resultado = calcularTaxaEntrega(config, bairro, 0);
+  // Bairro marcado como não atendido → não há entrega para essa região.
+  if (resultado.regra !== "gratuito" && resultado.atende === false && !resultado.exigeHumano) {
+    return ok(`Desculpe, *não entregamos em ${bairro}*. 😕\nVocê pode optar por *retirada* no local ou escolher outro endereço.`);
+  }
+  // Regra por distância com bairro, mas sem km: pede confirmação humana de taxa.
+  if (resultado.exigeHumano) {
+    return ok(
+      `📍 Entrega em: ${rua} — ${bairro}\nPreciso confirmar a taxa de entrega com um atendente, um instante. 🙂\nQual a forma de pagamento?\n${(await listarFormasPagamento(ctx.empresaId)).map((f, i) => `${i + 1}. ${f.label}`).join("\n")}`,
+      { endereco: { rua, bairro }, taxa: Math.round(resultado.taxa * 100) / 100 }
+    );
+  }
+  const taxa = resultado.taxa;
   const taxaFormatada = taxa === 0 ? "grátis" : brl(taxa);
   const geo =
     latitude !== undefined &&

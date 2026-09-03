@@ -20,7 +20,8 @@ import { calcularPrecoItem, ehSaborPremium, validarMisturaSabores, type SaborPre
  *
  * Os valores seguem o cardápio fechado da Disk Pizza Rozeno:
  * Média 46 (tradicional) / 52 (especial); Grande 56 / 62;
- * Família 66 / 72; acréscimo de R$ 10 por sabor premium ADICIONAL.
+ * Família 66 / 72; acréscimo de R$ 10 aplicado UMA única vez quando
+ * há 2 ou mais sabores premium (o 3º da família não soma outro).
  */
 
 const ACRESCIMO = 10;
@@ -47,7 +48,7 @@ function preco(sabores: SaborPreco[], maxSabores: number, quantidade = 1, adicio
   return r;
 }
 
-describe("acréscimo por sabor premium ADICIONAL", () => {
+describe("acréscimo R$10 UMA única vez (2+ premium)", () => {
   it("1 sabor tradicional: Média = 46", () => {
     expect(preco([tradicional(46)], 2).precoUnitario).toBe(46);
   });
@@ -64,8 +65,8 @@ describe("acréscimo por sabor premium ADICIONAL", () => {
     expect(preco([especial(52), especial(52)], 2).precoUnitario).toBe(62);
   });
 
-  it("3 sabores especiais geram 2× R$10: Família = 72 + 20 = 92", () => {
-    expect(preco([especial(72), especial(72), especial(72)], 3).precoUnitario).toBe(92);
+  it("3 sabores especiais geram 1× R$10 (3º não soma outro): Família = 72 + 10 = 82", () => {
+    expect(preco([especial(72), especial(72), especial(72)], 3).precoUnitario).toBe(82);
   });
 
   it("2 especiais + 1 tradicional na Família = 72 + 10 = 82", () => {

@@ -28,9 +28,11 @@ import {
   tipoParaCanalPedido,
   lerImpressoras,
   destinoRealDoTipo,
+  lerConfigPizza,
 } from "@/lib/impressao";
-import { calcularTaxaEntrega, lerConfigTaxaEntrega, previsaoEntregaPadrao } from "@/lib/delivery";
+import { calcularTaxaEntrega, distanciaKmHaversine, lerConfigTaxaEntrega, previsaoEntregaPadrao } from "@/lib/delivery";
 import { calcularPrecoItem } from "@/lib/precificacao";
+import { calcularPrecoItem as calcularPrecoPizza } from "@/lib/preco-pizza";
 import { criarPedido } from "@/lib/pedidos/criar-pedido";
 import { novaChaveIdempotencia } from "@/lib/idempotencia";
 import {
@@ -114,6 +116,13 @@ interface Estado {
   pendentes?: string[];
   canal?: "entrega" | "retirada";
   endereco?: { rua: string; bairro: string };
+  /**
+   * Localização nativa do WhatsApp compartilhada pelo cliente (lat/lng).
+   * Usada para calcular a distância até a loja (regra por distância).
+   */
+  geoCliente?: { lat: number; lng: number };
+  /** Distância (km) até a loja, estimada a partir de `geoCliente` + ponto de referência. */
+  kms?: number;
   taxa?: number;
   formaPagamento?: string;
   trocoPara?: number;
@@ -222,7 +231,7 @@ function querCardapio(texto: string): boolean {
 }
 
 function querHorario(texto: string): boolean {
-  return /(\bhor[aá]rio\b|hor[aá]rios|aberto\b|abre\b|fecha\b|funcionamento|quando voc[eê])/i.test(texto);
+  return /(\bhor[aá]rio\b|hor[aá]rios|aberto\b|abre\b|fecha\b|funcionamento|quando voc[eê]|t[aá] (?:aberto|funcionando|fazendo)|ainda (?:t[aá]|t[aã]o?) (?:aberto|funcionando|fazendo|entregando)|t[aã]o? fazendo|vai at[eé] que horas|vai at[eé] quando|at[eé] que horas)/i.test(texto);
 }
 
 function querPromocao(texto: string): boolean {
@@ -746,6 +755,9 @@ async function passoAtendimento(
           .replace(/^\s*(um|uma|o|a|de|da|do|s[óo]|por favor|porfavor)\s+/i, "")
           .trim();
         if (semIntencao.length >= 2) {
+          // Meio a meio entre DOIS produtos (ex.: "metade 4 queijos e metade doritos").
+          const combinado = await tentarCombinarMeioAMeio(texto, estado);
+          if (combinado.combinou && combinado.resultado) return combinado.resultado;
           // Vários itens numa tacada (ex.: "torre e coca", "pizza e refri")?
           // Processa o primeiro agora e guarda os demais para a sequência.
           const mult = separarMultiplosItens(semIntencao);
@@ -803,6 +815,8 @@ async function passoAtendimento(
       // "pizza grande", "calabresa"). Tenta interpretar como pedido antes de
       // renderizar como "não entendi".
       {
+        const combinado = await tentarCombinarMeioAMeio(texto, estado);
+        if (combinado.combinou && combinado.resultado) return combinado.resultado;
         const mult = separarMultiplosItens(texto);
         if (mult.processo && mult.pendentes.length > 0) {
           estado.pendentes = mult.pendentes;
@@ -1090,11 +1104,7 @@ async function passoAtendimento(
         return { etapa: "quantidade", texto: "Quantas unidades? (de 1 a 20)" };
       }
       atual.quantidade = n;
-      const precoUnit = calcularPrecoItem({
-        precoBaseProduto: atual.precoBase,
-        tamanho: atual.tamanho ?? null,
-        adicionais: atual.adicionais,
-      });
+      const precoUnit = await precoUnitarioItemMotor(atual, estado.empresaId);
       // Chave de idempotência do carrinho: criada no PRIMEIRO item e
       // persistida com o estado da conversa, antes de o cliente confirmar.
       // É o que faz um reenvio da Meta devolver o mesmo pedido.
@@ -1110,6 +1120,17 @@ async function passoAtendimento(
       });
       delete estado.atual;
       estado.tentativas = 0;
+      // Meio a meio entre produtos diferentes (ex.: "4 Queijos" + "Doritos"):
+      // o segundo sabor já foi consumido como metade do item montado, então
+      // NÃO deve entrar como um produto avulso separado. Registra só para o
+      // fluxo continuar para "mais_itens" sem duplicar a pizza.
+      const saboresDoItem = estado.itens.at(-1)?.sabores ?? [];
+      if (estado.pendentes && estado.pendentes.length > 0) {
+        const filtrados = estado.pendentes.filter(
+          (p) => !saboresDoItem.some((s) => s.toLowerCase() === p.toLowerCase())
+        );
+        estado.pendentes = filtrados;
+      }
       // Se ainda há itens pendentes pedidos de uma vez, processa o próximo agora.
       if (estado.pendentes && estado.pendentes.length > 0) {
         const proximo = estado.pendentes[0];
@@ -1596,6 +1617,199 @@ function separarMultiplosItens(texto: string): { primeiro?: string; pendentes: s
 }
 
 /**
+ * Reconhece "metade X ... metade Y" (meio a meio entre DOIS produtos
+ * diferentes, ex.: "pizza grande metade 4 queijos e metade doritos").
+ *
+ * No cardápio Rozeno cada sabor é um produto próprio e cada produto só
+ * lista a SI MESMO como sabor, então o meio-a-meio normal (2 sabores no
+ * mesmo produto) não cobre dois produtos distintos. Aqui juntamos os dois
+ * em UM item com `sabores = [X, Y]` — o `criarPedido` compartilhado já
+ * preciFica pela regra "maior sabor" (ver `criar-pedido.ts`).
+ */
+/**
+ * Corta, da CAUDA de um trecho de sabor, cláusulas de entrega/endereço/
+ * pagamento que não fazem parte do nome do sabor. Usado na montagem meio a
+ * meio para frases híbridas ("...metade doritos para entrega no pix na
+ * minha casa") — o sabor é "doritos", o resto é modalidade. Não destrói o
+ * texto original (o canal/tamanho/endereço continuam extraídos dele).
+ */
+function cortarClausulaEntrega(parte: string): string {
+  return parte
+    .replace(
+      /[\s,]+(?:para\s+entreg(?:ar|ue|ar-se)?|para\s+entrega|entrega\s+(?:na\s+minha)?\s*casa|na\s+minha\s+casa|em\s+casa|\spra\s+casa|\s?no\s+endereço|vou\s+buscar|vou\s+buscar\s+no\s+local|retir(?:ar|ada)|na\s+loja|no\s+local|no\s+pix|no\s+cart[aã]o|no\s+cr[eé]dito|no\s+d[eé]bito|no\s+dinheiro|na\s+entrega|pag(?:o|arei)?\s+(?:no|na|em)\s+[a-zà-ú]+|à\s+vista|em\s+dinheiro)+$/i,
+      ""
+    )
+    .trim();
+}
+
+/**
+ * Preço unitário do item EM MONTAGEM, usando a MESMA regra que o
+ * `criarPedido` usará ao gravar (fonte única de verdade):
+ *  - item com sabores (pizza): `preco-pizza` (MAIOR entre sabores +
+ *    acréscimo premium) — soma não pode divergir do banco.
+ *  - demais itens: `precificacao` (base do tamanho + adicionais).
+ *
+ * Este helper existe porque `precificacao` usa `tamanho.valor` e, num meio
+ * a meio entre produtos distintos (ex.: 4 Queijos + Doritos), isso perderia
+ * o preço do sabor mais caro na conversa (R$ 56) enquanto o pedido gravava
+ * R$ 62 — conversa e banco com valores diferentes é proibido.
+ */
+async function precoUnitarioItemMotor(
+  atual: ItemEmMontagem,
+  empresaId: string
+): Promise<number> {
+  if (!atual.temSabores || atual.saboresEscolhidos.length === 0) {
+    return calcularPrecoItem({
+      precoBaseProduto: atual.precoBase,
+      tamanho: atual.tamanho ?? null,
+      adicionais: atual.adicionais,
+    });
+  }
+
+  const tamanhoNome = atual.tamanho?.nome ?? null;
+  const escolhidos = [...new Set(atual.saboresEscolhidos)];
+  try {
+    const [produtos, configPizza, tamanho] = await Promise.all([
+      // Cada sabor é um Produto próprio (a pizza tem sabores = produtos), e o
+      // preço do sabor num tamanho está em Produto.precos. `tipo` vem do Sabor.
+      prisma.produto.findMany({
+        where: { empresaId, ativo: true, nome: { in: escolhidos } },
+        include: {
+          precos: { include: { tamanho: true } },
+          sabores: { include: { sabor: { select: { nome: true, tipo: true } } } },
+        },
+      }),
+      lerConfigPizza(empresaId),
+      tamanhoNome
+        ? prisma.tamanho.findFirst({ where: { empresaId, nome: tamanhoNome } })
+        : Promise.resolve(null),
+    ]);
+
+    const saborTipoPorNome = new Map<string, string>();
+    for (const p of produtos) {
+      for (const ps of p.sabores) {
+        if (ps.sabor.nome && !saborTipoPorNome.has(ps.sabor.nome.toLowerCase())) {
+          saborTipoPorNome.set(ps.sabor.nome.toLowerCase(), ps.sabor.tipo ?? "tradicional");
+        }
+      }
+    }
+    const saboresParaCalc = escolhidos.map((nome) => {
+      const p = produtos.find((p) => p.nome.toLowerCase() === nome.toLowerCase());
+      const precoNoTamanho =
+        p && tamanhoNome
+          ? (p.precos.find((pt) => pt.tamanho.nome === tamanhoNome)?.valor ?? atual.precoBase)
+          : atual.precoBase;
+      return {
+        saborId: p?.id ?? "",
+        tipo: saborTipoPorNome.get(nome.toLowerCase()) ?? p?.sabores[0]?.sabor.tipo ?? "tradicional",
+        precoNoTamanho,
+      };
+    });
+
+    const r = calcularPrecoPizza({
+      sabores: saboresParaCalc,
+      adicionais: atual.adicionais.map((a) => ({ preco: a.preco, quantidade: 1 })),
+      quantidade: atual.quantidade ?? 1,
+      acrescimoPorSaborPremium: configPizza?.acrescimoPorSaborPremium ?? 0,
+      maxSabores: Math.max(1, tamanho?.maxSabores ?? 1),
+    });
+    if (!("erro" in r)) return r.precoUnitario;
+  } catch {
+    // Consulta indisponível (mock/offline): cai no cálculo simples, que o
+    // `criarPedido` refaz de forma autoritativa na gravação. Nunca trava a
+    // conversa por causa de preço.
+  }
+  return calcularPrecoItem({
+    precoBaseProduto: atual.precoBase,
+    tamanho: atual.tamanho ?? null,
+    adicionais: atual.adicionais,
+  });
+}
+
+async function tentarCombinarMeioAMeio(
+  texto: string,
+  estado: Estado
+): Promise<{ combinou: boolean; resultado: PassoResultado | null }> {
+  // Padrão: pelo menos dois "metade/meio a meio" com nomes.
+  if (!/(metade|meio a meio|meio)/i.test(texto)) return { combinou: false, resultado: null };
+  const partes = texto
+    .split(/\s+\be\b\s+|[,;]|\s+\+\s+/g)
+    .map((p) => p.trim())
+    .filter((p) => /metade|meia|meio|sabor/i.test(p));
+  if (partes.length < 2) return { combinou: false, resultado: null };
+
+  // Extrai o(s) termo(s) de sabor que vêm DEPOIS de "metade/meio a meio",
+  // independente de onde a palavra aparece na frase. Frases híbridas podem
+  // trazer modalidade de entrega, endereço ou pagamento logo depois do
+  // sabor ("...metade doritos para entrega", "...em minha casa", "...no
+  // pix") — essas cláusulas NÃO podem entrar no nome do sabor nem dividir
+  // a pizza. Cortamos a cláusula da cauda ANTES de capturar o sabor; o
+  // texto original segue íntegro para o canal/tamanho/endereço.
+  const nomes = partes.map((p) => {
+    const limpo = cortarClausulaEntrega(p);
+    const m = limpo.match(/(?:metade\s*(?:da\s*|de\s*)?|meia\s*(?:de\s*)?|meio a meio de\s*|meio\s*de\s*)([a-záéíóúâêôãõ0-9 ]+?)\s*$/i);
+    return m ? m[1].trim().replace(/[.,!?]+$/, "") : "";
+  });
+  // Remove termos genéricos que não são sabores.
+  const termos = nomes.filter((n) => n && !/^(grande|media|família|média|pequena|pizza|uma|um|com|de)\s*$/i.test(n));
+  if (termos.length < 2) return { combinou: false, resultado: null };
+
+  const achados = await Promise.all(
+    termos.map((t) => buscarProdutos(estado.empresaId, t, 3))
+  );
+  const resolvidos = achados.map((a) => (a.length === 1 ? a[0] : null));
+  if (resolvidos.some((p) => !p)) return { combinou: false, resultado: null };
+  const [prodA, prodB] = resolvidos as NonNullable<(typeof resolvidos)[number]>[];
+
+  // Só combina produtos "pizza"-like (com tamanhos e sabores), nunca bebidas/outros.
+  const ehPizza = (p: { temSabores: boolean }) => Boolean(p.temSabores);
+  if (!ehPizza(prodA) || !ehPizza(prodB) || prodA.id === prodB.id) {
+    return { combinou: false, resultado: null };
+  }
+
+  const real = await prisma.produto.findFirst({
+    where: { id: prodA.id, empresaId: estado.empresaId },
+    include: {
+      precos: { include: { tamanho: true }, orderBy: { tamanho: { fatorPreco: "asc" } } },
+      sabores: { include: { sabor: true } },
+    },
+  });
+  if (!real || !real.ativo) return { combinou: false, resultado: null };
+
+  const disp = await verificarDisponibilidade(estado.empresaId, real.id);
+  if (!disp.disponivel) return { combinou: false, resultado: null };
+
+  const saboresLista = [
+    ...real.sabores.map((ps) => ps.sabor.nome),
+    ...(prodB.sabores ?? []).map((s: { nome: string }) => s.nome),
+  ];
+  const saborB = saboresLista.find((s) => s.toLowerCase() === prodB.nome.toLowerCase()) ?? prodB.nome;
+
+  estado.atual = {
+    produtoId: real.id,
+    nome: real.nome,
+    // Meio a meio: exibe o preço do sabor MAIS CARO (o `criarPedido` já faz
+    // o mesmo na gravação — ver "maior sabor" em `criar-pedido.ts`).
+    precoBase: Math.max(real.preco, prodB.precoBase ?? 0),
+    temTamanhos: real.precos.length > 1,
+    temSabores: true,
+    sabores: [...new Set(saboresLista)].map((nome) => ({ nome, tipo: "tradicional" })),
+    tamanhos: real.precos.map((pt) => ({ nome: pt.tamanho.nome, valor: pt.valor })),
+    saboresEscolhidos: [real.nome, saborB],
+    saboresFaltando: 0,
+    adicionais: [],
+  };
+  // Aproveita o tamanho citado na mensagem (ex.: "grande"), se houver.
+  const semAcento = (s: string) =>
+    s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const textoMun = semAcento(texto);
+  const tamanhoCitado = real.precos.find((pt) => textoMun.includes(semAcento(pt.tamanho.nome)));
+  if (tamanhoCitado) estado.atual.tamanho = { nome: tamanhoCitado.tamanho.nome, valor: tamanhoCitado.valor };
+  estado.tentativas = 0;
+  return { combinou: true, resultado: await proximoDoItem(estado.atual, estado) };
+}
+
+/**
  * Processa o primeiro de uma lista de produtos citados de uma vez, guardando os
  * demais em `estado.pendentes`. Usa a IA de normalização para resolver sinônimos.
  */
@@ -1749,7 +1963,12 @@ async function proximoPassoDoPedido(estado: Estado): Promise<PassoResultado> {
   if (estado.canal === "entrega" && estado.taxa === undefined) {
     const subtotal = estado.itens.reduce((acc, i) => acc + i.precoUnit * i.quantidade, 0);
     const config = await lerConfigTaxaEntrega(estado.empresaId);
-    const { taxa } = calcularTaxaEntrega(config, estado.endereco?.bairro, subtotal);
+    const { taxa, exigeHumano } = calcularTaxaEntrega(config, estado.endereco?.bairro, subtotal, {
+      ...(estado.kms !== undefined ? { distanciaEmKm: estado.kms } : {}),
+    });
+    if (exigeHumano) {
+      return { etapa: "entrega_retirada", texto: "⏳ Preciso confirmar a taxa de entrega com um atendente antes de fechar. Um instante!" };
+    }
     estado.taxa = Math.round(taxa * 100) / 100;
   }
   if (!estado.formaPagamento) {
@@ -1785,6 +2004,11 @@ async function aplicarExtracaoCompleta(
   // "2") e nunca seria um pedido completo — essas saem daqui sem nenhuma
   // consulta ao banco.
   if (original.trim().split(/\s+/).length < 5) return null;
+
+  // Meio a meio entre DOIS produtos (ex.: "metade 4 queijos e metade doritos")
+  // combinado em UMA pizza com 2 sabores — antes de a extração os separar.
+  const combinado = await tentarCombinarMeioAMeio(original, estado);
+  if (combinado.combinou && combinado.resultado) return combinado.resultado;
 
   const produtos = await listarProdutosDisponiveis(estado.empresaId);
   if (produtos.length === 0) return null;
@@ -1846,14 +2070,11 @@ async function aplicarExtracaoCompleta(
     if (completo) {
       montagem.quantidade = montagem.quantidade ?? 1;
       if (!estado.chaveIdempotencia) estado.chaveIdempotencia = novaChaveIdempotencia();
+      const precoUnit = await precoUnitarioItemMotor(montagem, estado.empresaId);
       estado.itens.push({
         produtoId: montagem.produtoId,
         nome: montagem.nome,
-        precoUnit: calcularPrecoItem({
-          precoBaseProduto: montagem.precoBase,
-          tamanho: montagem.tamanho ?? null,
-          adicionais: montagem.adicionais,
-        }),
+        precoUnit,
         quantidade: montagem.quantidade,
         tamanho: montagem.tamanho?.nome ?? null,
         sabores: montagem.saboresEscolhidos,
@@ -1997,11 +2218,21 @@ async function aplicarSlots(
       if ((r.tipo === "EXACT" || r.tipo === "UNIQUE") && r.escolhido!.nome !== ultimo.tamanho) {
         const novo = r.escolhido as { nome: string; valor: number };
         ultimo.tamanho = novo.nome;
-        ultimo.precoUnit = calcularPrecoItem({
-          precoBaseProduto: produto.precoBase,
-          tamanho: novo,
+        // Pizza com sabores usa a mesma regra de preço que o `criarPedido`
+        // usará na gravação (a correção não pode divergir do banco).
+        const premontagem: ItemEmMontagem = {
+          produtoId: ultimo.produtoId,
+          nome: ultimo.nome,
+          precoBase: produto.precoBase,
+          temTamanhos: true,
+          temSabores: ultimo.sabores.length > 0,
+          sabores: ultimo.sabores.map((s) => ({ nome: s, tipo: "tradicional" })),
+          tamanhos: [{ nome: novo.nome, valor: novo.valor }],
+          tamanho: { nome: novo.nome, valor: novo.valor },
+          saboresEscolhidos: ultimo.sabores,
           adicionais: ultimo.adicionais,
-        });
+        };
+        ultimo.precoUnit = await precoUnitarioItemMotor(premontagem, estado.empresaId);
         estado.taxa = undefined; // total muda: recalcula a taxa por faixa
         const proximo = await proximoPassoDoPedido(estado);
         return { ...proximo, texto: `Trocado para *${novo.nome}*. ${proximo.texto}` };
@@ -2041,14 +2272,11 @@ async function pularPerguntasJaRespondidas(
     !estado.ambiguidade;
   if (itemPronto && atual) {
     if (!estado.chaveIdempotencia) estado.chaveIdempotencia = novaChaveIdempotencia();
+    const precoUnit = await precoUnitarioItemMotor(atual, estado.empresaId);
     estado.itens.push({
       produtoId: atual.produtoId,
       nome: atual.nome,
-      precoUnit: calcularPrecoItem({
-        precoBaseProduto: atual.precoBase,
-        tamanho: atual.tamanho ?? null,
-        adicionais: atual.adicionais,
-      }),
+      precoUnit,
       quantidade: atual.quantidade!,
       tamanho: atual.tamanho?.nome ?? null,
       sabores: atual.saboresEscolhidos,
@@ -2137,10 +2365,23 @@ function proximoDoItem(atual: ItemEmMontagem, estado: Estado): PassoResultado {
   return { etapa: "quantidade", texto: `Quantas unidades de *${atual.nome}*?` };
 }
 
+/** Estima a distância (km) até a loja a partir da localização compartilhada. */
+async function estimarDistanciaDaLoja(estado: Estado): Promise<{ distanciaKim: number | null }> {
+  if (!estado.geoCliente) return { distanciaKim: null };
+  const config = await lerConfigTaxaEntrega(estado.empresaId);
+  if (!config.pontoReferencia) return { distanciaKim: null };
+  return { distanciaKim: distanciaKmHaversine(estado.geoCliente, config.pontoReferencia) };
+}
+
 async function irParaPagamento(estado: Estado): Promise<PassoResultado> {
   const subtotal = estado.itens.reduce((acc, i) => acc + i.precoUnit * i.quantidade, 0);
   const configTaxa = await lerConfigTaxaEntrega(estado.empresaId);
-  const { taxa } = calcularTaxaEntrega(configTaxa, estado.endereco?.bairro, subtotal);
+  const { taxa, exigeHumano } = calcularTaxaEntrega(configTaxa, estado.endereco?.bairro, subtotal, {
+    ...(estado.kms !== undefined ? { distanciaEmKm: estado.kms } : {}),
+  });
+  if (exigeHumano) {
+    return { etapa: "entrega_retirada", texto: "⏳ Preciso confirmar a taxa de entrega com um atendente antes de fechar. Um instante!" };
+  }
   estado.taxa = Math.round(taxa * 100) / 100;
   const formas = await listarFormasPagamento(estado.empresaId);
   const taxaInfo = taxa === 0 ? "A taxa de entrega está *grátis* para este pedido! 🎉" : `A taxa de entrega para *${estado.endereco?.bairro}* é de *${brl(taxa)}*.`;
@@ -2208,8 +2449,9 @@ async function criarPedidoReal(estado: Estado): Promise<PassoResultado> {
   // ignorava a regra de preço de pizza (`preco-pizza.ts`), o limite de
   // sabores do tamanho, a validação doce/salgada e a idempotência por
   // índice único — ou seja, uma pizza Família com 3 sabores especiais
-  // saía pelo WhatsApp por R$ 72 enquanto o PDV cobrava R$ 92 pela mesma
-  // pizza. Agora o WhatsApp usa exatamente o mesmo `criarPedido()` do
+  // saía pelo WhatsApp por R$ 72 enquanto o PDV cobrava o mesmo pedido
+  // mais caro (3 especiais = R$ 82). Agora o WhatsApp usa exatamente o
+  // mesmo `criarPedido()` do
   // PDV: preço, taxa e validações vêm todos do backend.
   // ------------------------------------------------------------------
   const canal = estado.canal === "entrega" ? "delivery" : "retirada";
@@ -2235,7 +2477,7 @@ async function criarPedidoReal(estado: Estado): Promise<PassoResultado> {
       adicionais: i.adicionais.map((a) => ({ nome: a.nome, preco: a.preco, quantidade: 1 })),
     })),
     ...(canal === "delivery" && estado.endereco?.rua && estado.endereco?.bairro
-      ? { entrega: { endereco: estado.endereco.rua, bairro: estado.endereco.bairro } }
+      ? { entrega: { endereco: estado.endereco.rua, bairro: estado.endereco.bairro, ...(estado.kms !== undefined ? { distanciaEmKm: estado.kms } : {}) } }
       : {}),
     ...(canal === "delivery" && estado.formaPagamento
       ? { formaPagamentoEntrega: estado.formaPagamento, pagarNaEntrega: true }
@@ -2392,12 +2634,17 @@ export async function receberMensagemWhatsApp(
 ): Promise<ResultadoMensagem> {
   const tel = normalizarTelefone(telefone);
   let limpo = texto.trim();
-  // Localização nativa do WhatsApp: extrai lat/lng e transforma em pedido de endereço
+  // Localização nativa do WhatsApp: captura lat/lng (para cálculo da
+  // distância) e transforma em um pedido de endereço compreensível.
+  let geoRecemRecebida: { lat: number; lng: number } | null = null;
   const matchLoc = limpo.match(/\[LOCALIZACAO\]\s*(.*?)\s*\|\s*lat=([-+0-9.]+)\s*lng=([-+0-9.]+)/i);
   if (matchLoc) {
     const desc = matchLoc[1].trim();
     const lat = Number(matchLoc[2]);
     const lng = Number(matchLoc[3]);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      geoRecemRecebida = { lat, lng };
+    }
     limpo = `Minha localização: ${desc || "compartilhada"}. latitude ${lat} longitude ${lng}`;
   }
   if (!tel || !limpo) {
@@ -2534,6 +2781,12 @@ export async function receberMensagemWhatsApp(
   if (typeof estado.tentativas !== "number") estado.tentativas = 0;
   // Identificação pelo número: o telefone do cliente é sempre o da conversa.
   if (!estado.cliente) estado.cliente = { nome: conversa.nome ?? null, telefone: tel };
+  // Localização compartilhada: guarda a geo e recalcula a distância até a loja.
+  if (geoRecemRecebida) {
+    estado.geoCliente = geoRecemRecebida;
+    const { distanciaKim } = await estimarDistanciaDaLoja(estado);
+    if (distanciaKim !== null) estado.kms = distanciaKim;
+  }
 
   // SLOT GLOBAL: nome. O cliente pode se apresentar em QUALQUER momento
   // ("sou o Victor" no meio do pedido) e nao deve ser perguntado de novo

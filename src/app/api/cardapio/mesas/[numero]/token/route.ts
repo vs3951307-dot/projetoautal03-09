@@ -4,8 +4,32 @@ import { autorizar, registrarAuditoria } from "@/lib/acesso";
 import { prisma } from "@/lib/prisma";
 import { regenerarTokenMesa, tokenAtualDaMesa, urlDoCardapio } from "@/lib/cardapio/tokens";
 
+/**
+ * Origem pública usada para montar o link/QR do cardápio da mesa.
+ *
+ * Prioridade (primeiro que existir vence):
+ *   1. NEXT_PUBLIC_CARDAPIO_BASE_URL — URL específica do cardápio. Permite,
+ *      em desenvolvimento, apontar para o IPv4 da rede local do notebook
+ *      (ex.: http://192.168.0.10:3000) para o QR abrir no celular na mesma
+ *      rede Wi-Fi — sem hardcodar localhost nem versionar IP local (a URL
+ *      fica em variável de ambiente, fora do Git).
+ *   2. NEXT_PUBLIC_APP_URL — URL pública oficial configurada.
+ *   3. APP_URL — URL pública do lado do servidor.
+ *   4. Origem da requisição (fallback seguro: nunca localhost hardcoded).
+ */
 function baseUrl(req: NextRequest): string {
-  return process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin;
+  const opcoes = [
+    process.env.NEXT_PUBLIC_CARDAPIO_BASE_URL,
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.APP_URL,
+    new URL(req.url).origin,
+  ];
+  for (const opcao of opcoes) {
+    if (opcao && /^https?:\/\/.+/i.test(opcao.trim())) {
+      return opcao.trim().replace(/\/+$/, "");
+    }
+  }
+  return new URL(req.url).origin;
 }
 
 /** O slug vem SEMPRE do empresaId da sessão, nunca da requisição. */

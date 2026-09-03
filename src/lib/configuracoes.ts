@@ -139,11 +139,21 @@ export interface TaxaConfiguracao {
 
 /** Regras da taxa de entrega (PEDIDO 17) — cálculo em `src/lib/delivery.ts`. */
 export interface TaxaEntregaConfig {
-  regra: "fixa" | "bairro";
+  regra: "fixa" | "bairro" | "distancia";
   valorFixo: number;
   valorPadrao: number;
   gratisAcima: number;
   bairros: { bairro: string; valor: number }[];
+  /** Bairros onde não há entrega. */
+  bairrosNaoAtendidos: string[];
+  /** Regra por distância: R$ por km. */
+  valorPorKm: number;
+  /** Regra por distância: taxa mínima. */
+  taxaMinima: number;
+  /** Regra por distância: taxa base fixa antes de somar a distância. */
+  taxaBase: number;
+  /** Regra por distância: raio máximo de entrega (km). */
+  raioMaximoKm: number;
 }
 
 /** Formas e taxas vêm do banco (GET /api/configuracoes, chave "taxas") — nenhuma de exemplo. */
@@ -160,6 +170,11 @@ export const TAXA_ENTREGA: TaxaEntregaConfig = {
   valorPadrao: 0,
   gratisAcima: 0,
   bairros: [],
+  bairrosNaoAtendidos: [],
+  valorPorKm: 0,
+  taxaMinima: 0,
+  taxaBase: 0,
+  raioMaximoKm: 0,
 };
 
 /* ---------------------------------- Backup -------------------------------- */

@@ -23,6 +23,7 @@ export interface MesaResolvida {
   empresaId: string;
   empresaNome: string;
   empresaSlug: string;
+  empresaLogoUrl: string | null;
   mesaId: number;
   mesaNumero: number;
 }
@@ -45,7 +46,10 @@ export async function resolverTokenMesa(
   const limpo = String(token ?? "").trim();
   if (!limpo || limpo.length > 128) return null;
 
-  const empresa = await prisma.empresa.findUnique({ where: { slug: empresaSlug } });
+  const empresa = await prisma.empresa.findUnique({
+    where: { slug: empresaSlug },
+    select: { id: true, nome: true, slug: true, status: true, logoUrl: true },
+  });
   if (!empresa) return null;
   if (!["ativa", "teste"].includes(empresa.status)) return null;
 
@@ -61,6 +65,7 @@ export async function resolverTokenMesa(
     empresaId: empresa.id,
     empresaNome: empresa.nome,
     empresaSlug: empresa.slug,
+    empresaLogoUrl: empresa.logoUrl,
     mesaId: registro.mesa.id,
     mesaNumero: registro.mesa.numero,
   };

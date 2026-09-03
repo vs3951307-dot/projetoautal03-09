@@ -30,6 +30,7 @@ import { PagamentoDialog } from "@/app/pdv/_components/pagamento-dialog";
 import { NfceDialog } from "@/app/pdv/_components/nfce-dialog";
 import { PizzaPickerDialog } from "@/app/pdv/_components/pizza-picker-dialog";
 import MesaPedidoOverlay from "@/app/pdv/_components/mesa-pedido-overlay";
+import { FilaAprovacao } from "@/components/salao/FilaAprovacao";
 
 const CATALOGO_FALLBACK: CatalogoApi = {
   categorias: [],
@@ -266,6 +267,11 @@ export function SalaoView() {
             : "Toque numa mesa ocupada para ver a comanda e cobrar."
         }
       />
+
+      {/* Pedidos do cardápio digital do QR aguardando aprovação — aparecem
+          aqui no PDV (Salão) para o operador aceitar ou rejeitar. A fila usa
+          a rota real GET /api/pedidos/aguardando e o POST já existente. */}
+      <FilaAprovacao />
 
       {mesas.length === 0 ? (
         <EmptyState

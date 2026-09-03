@@ -47,6 +47,7 @@ const MESA_RESOLVIDA = {
   empresaId: "empA",
   empresaNome: "Pizzaria A",
   empresaSlug: "pizzaria-a",
+  empresaLogoUrl: null,
   mesaId: 10,
   mesaNumero: 5,
 };

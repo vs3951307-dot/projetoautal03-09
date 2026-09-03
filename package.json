@@ -20,6 +20,7 @@
     "db:sync-tenants": "tsx scripts/sincronizar-schemas-tenants.ts",
     "db:backfill-etapa1": "tsx scripts/backfill-etapa1.ts",
     "db:conferir-precos": "tsx scripts/conferir-precos.ts",
+    "db:conferir-taxas": "tsx scripts/conferir-taxas.ts",
     "db:criar-super-admin": "tsx scripts/criar-super-admin.ts",
     "db:resetar-senha-super-admin": "tsx scripts/resetar-senha-super-admin.ts",
     "test": "vitest run",

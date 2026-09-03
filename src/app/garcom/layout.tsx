@@ -2,7 +2,7 @@
 import { AvisoCarencia } from "@/components/assinatura/aviso-carencia";
 import { GarcomProvider } from "@/app/garcom/_lib/garcom-context";
 import { exigirRota } from "@/lib/acesso";
-import { temPermissao } from "@/lib/permissao";
+import { usuarioTemCopiloto } from "@/lib/permissao";
 
 const GARCOM_NAV_ITEMS = [{ label: "Mesas", href: "/garcom", icon: "layout-grid" }];
 
@@ -26,7 +26,7 @@ export default async function GarcomLayout({ children }: { children: React.React
         navItems={GARCOM_NAV_ITEMS}
         activeHref="/garcom"
         notificationCount={2}
-        copilotoDisponivel={usuario.modulosAtivos.includes("copiloto") && temPermissao(usuario, "admin")}
+        copilotoDisponivel={usuarioTemCopiloto(usuario, "copiloto")}
       >
         {children}
       </AppShell>

@@ -77,6 +77,8 @@ export function RelatorioSalao() {
   const { resumo, vendasPorHorario, ocupacaoSalao, salaoMesas } = dados.dados;
 
   const totalOcupacao = ocupacaoSalao.reduce((acc, m) => acc + m.valor, 0);
+  const ocupadas = totalOcupacao - (ocupacaoSalao.find((m) => m.chave === "livres")?.valor ?? 0);
+  const primeiroValor = ocupacaoSalao[0]?.valor ?? 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -127,27 +129,37 @@ export function RelatorioSalao() {
             </p>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-6 p-6 pt-4 sm:p-7 sm:pt-4">
-            <DonutChart
-              data={ocupacaoSalao.map((m) => ({ label: m.rotulo, value: m.valor, cor: m.cor }))}
-              formatValue={(v) => `${v} mesas`}
-              centerValue={`${ocupacaoSalao[0].valor} de ${totalOcupacao}`}
-              centerLabel="em uso"
-            />
-            <ul className="flex w-full flex-col gap-2.5">
-              {ocupacaoSalao.map((m) => (
-                <li key={m.chave} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="flex items-center gap-2.5">
-                    <span
-                      className="h-3 w-3 rounded-full"
-                      style={{ backgroundColor: m.cor }}
-                      aria-hidden="true"
-                    />
-                    {m.rotulo}
-                  </span>
-                  <span className="font-semibold tabular">{m.valor} mesas</span>
-                </li>
-              ))}
-            </ul>
+            {ocupacaoSalao.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-10 text-center">
+                <LayoutGrid className="h-8 w-8 text-muted-foreground/40" aria-hidden="true" />
+                <p className="font-medium text-muted-foreground">Nenhuma mesa registrada</p>
+                <p className="text-sm text-muted-foreground/70">Cadastre mesas para ver a ocupação do salão.</p>
+              </div>
+            ) : (
+              <>
+                <DonutChart
+                  data={ocupacaoSalao.map((m) => ({ label: m.rotulo, value: m.valor, cor: m.cor }))}
+                  formatValue={(v) => `${v} mesas`}
+                  centerValue={`${primeiroValor} de ${totalOcupacao}`}
+                  centerLabel="em uso"
+                />
+                <ul className="flex w-full flex-col gap-2.5">
+                  {ocupacaoSalao.map((m) => (
+                    <li key={m.chave} className="flex items-center justify-between gap-3 text-sm">
+                      <span className="flex items-center gap-2.5">
+                        <span
+                          className="h-3 w-3 rounded-full"
+                          style={{ backgroundColor: m.cor }}
+                          aria-hidden="true"
+                        />
+                        {m.rotulo}
+                      </span>
+                      <span className="font-semibold tabular">{m.valor} mesas</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -174,6 +186,13 @@ export function RelatorioSalao() {
               </TableRow>
             </TableHeader>
             <TableBody>
+              {salaoMesas.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                    Nenhuma movimentação de salão no período.
+                  </TableCell>
+                </TableRow>
+              )}
               {salaoMesas.map((mesa) => {
                 const cfg = STATUS_MESA_CONFIG[mesa.status];
                 return (
